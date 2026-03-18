@@ -32,6 +32,8 @@ async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
         // --- FASE 1: LA CONSULTA INICIAL ---
         console.log(`[Scraper ONPE] Escribiendo DNI en el portal...`);
         // Usamos el placeholder porque los mat-input cambian de número
+        await page.screenshot({ path: 'onpe_error.png' });
+        console.log("Captura de pantalla guardada en el VPS");
         await page.fill('input[placeholder="Número de DNI"]', dni);
 
         console.log(`[Scraper ONPE] Haciendo clic en Consultar...`);
