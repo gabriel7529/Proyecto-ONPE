@@ -1,23 +1,20 @@
-const { chromium } = require('playwright-extra');
+const { firefox } = require('playwright-extra');
 const stealth = require('puppeteer-extra-plugin-stealth')();
 
 // Le decimos a Playwright que use el plugin de sigilo globalmente
-chromium.use(stealth);
+firefox.use(stealth);
 
 async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
     let browser;
     try {
         console.log(`[Scraper ONPE] Iniciando navegación sigilosa...`);
 
-        browser = await chromium.launch({
+        browser = await firefox.launch({
             headless: true, // Modo invisible (obligatorio para el VPS)
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage', // Clave para evitar que Docker se quede sin memoria
-                '--disable-accelerated-2d-canvas',
-                '--disable-gpu',
-                '--disable-blink-features=AutomationControlled'
+                
             ]
         });
 

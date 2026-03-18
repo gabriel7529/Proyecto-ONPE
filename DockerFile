@@ -1,5 +1,5 @@
 # Usamos la imagen oficial de Playwright que ya trae Chromium y todas las dependencias de Linux
-FROM mcr.microsoft.com/playwright:v1.42.1-jammy
+FROM mcr.microsoft.com/playwright:v1.58.2-jammy
 
 # Crear y movernos a la carpeta de la app
 WORKDIR /usr/src/app
