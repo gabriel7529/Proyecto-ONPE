@@ -9,11 +9,25 @@ async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
 
         // headless: false para que veas la magia ocurrir.
         // Cuando lo subas a tu servidor final (producción), cámbialo a true.
-        browser = await chromium.launch({ headless: true, slowMo: 50 });
-        const context = await browser.newContext({ acceptDownloads: true });
+        browser = await chromium.launch({
+            headless: true, // Ahora sí en true
+            args: [
+                '--disable-blink-features=AutomationControlled', // Quita la marca de "automatizado"
+                '--no-sandbox',
+                '--disable-setuid-sandbox'
+            ]
+        });
+
+        const context = await browser.newContext({
+            acceptDownloads: true,
+            // Ponemos un User Agent de una PC normal
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            viewport: { width: 1280, height: 720 } // Un tamaño de pantalla real
+        });
         const page = await context.newPage();
 
         await page.goto('https://consultaelectoral.onpe.gob.pe/inicio');
+        await page.waitForLoadState('networkidle');
 
         // --- FASE 1: LA CONSULTA INICIAL ---
         console.log(`[Scraper ONPE] Escribiendo DNI en el portal...`);
@@ -62,19 +76,22 @@ async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
 
         console.log(`[Scraper ONPE] ¡Botón activado! Preparando trampa para la nueva pestaña...`);
 
-        // EL TRUCO CORREGIDO: Le decimos a Playwright que espere a que se abra una NUEVA PESTAÑA
-        const [nuevaPestana] = await Promise.all([
-            context.waitForEvent('page'), // Escucha el evento de nueva pestaña
-            btnDescargar.click()          // Hace el clic que detona la nueva pestaña
-        ]);
+        // 1. Preparamos la promesa para capturar la nueva página
+        const nuevaPestanaPromise = context.waitForEvent('page');
 
-        // Esperamos un milisegundo a que la pestaña empiece a cargar
-        await nuevaPestana.waitForLoadState('domcontentloaded');
+        // 2. Hacemos clic en el botón de descargar
+        await btnDescargar.click();
 
-        // ¡Le robamos la URL a la nueva pestaña!
+        // 3. CAPTURA INMEDIATA: Esperamos a que la pestaña exista, pero NO a que cargue
+        const nuevaPestana = await nuevaPestanaPromise;
+
+        // Le damos un respiro de medio segundo solo para que la URL se actualice de 'about:blank' a la de AWS
+        await page.waitForTimeout(500);
+
         const urlPdfFinal = nuevaPestana.url();
 
         console.log(`[Scraper ONPE] ¡URL ATRAPADA CON ÉXITO!`);
+        console.log(`[URL]: ${urlPdfFinal}`);
 
         return {
             esMiembro: true,
