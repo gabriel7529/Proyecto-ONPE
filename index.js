@@ -8,6 +8,7 @@ const app = express();
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
+app.use(express.static('public'));
 
 app.post('/api/credencial', async (req, res) => {
     const { dni } = req.body;
