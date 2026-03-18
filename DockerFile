@@ -1,0 +1,20 @@
+# Usamos la imagen oficial de Playwright que ya trae Chromium y todas las dependencias de Linux
+FROM mcr.microsoft.com/playwright:v1.42.1-jammy
+
+# Crear y movernos a la carpeta de la app
+WORKDIR /usr/src/app
+
+# Copiar package.json y package-lock.json
+COPY package*.json ./
+
+# Instalar dependencias de Node
+RUN npm install
+
+# Copiar todo el código de tu proyecto al contenedor
+COPY . .
+
+# Exponer el puerto que usa tu API
+EXPOSE 3000
+
+# Comando para iniciar la aplicación
+CMD ["node", "index.js"]
