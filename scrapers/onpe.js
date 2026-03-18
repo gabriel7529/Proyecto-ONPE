@@ -1,8 +1,7 @@
-// IMPORTANTE: Cambiamos la forma de importar
 const { chromium } = require('playwright-extra');
 const stealth = require('puppeteer-extra-plugin-stealth')();
 
-// Le decimos a Playwright que use el plugin de sigilo
+// Le decimos a Playwright que use el plugin de sigilo globalmente
 chromium.use(stealth);
 
 async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
@@ -11,10 +10,13 @@ async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
         console.log(`[Scraper ONPE] Iniciando navegación sigilosa...`);
 
         browser = await chromium.launch({
-            headless: true, // Siempre true en el VPS
+            headless: true, // Modo invisible (obligatorio para el VPS)
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage', // Clave para evitar que Docker se quede sin memoria
+                '--disable-accelerated-2d-canvas',
+                '--disable-gpu',
                 '--disable-blink-features=AutomationControlled'
             ]
         });
@@ -23,13 +25,14 @@ async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
             viewport: { width: 1280, height: 720 },
             locale: 'es-PE',
-            timezoneId: 'America/Lima'
+            timezoneId: 'America/Lima',
+            acceptDownloads: true
         });
 
         const page = await context.newPage();
 
         // 1. Navegamos a la ONPE
-        console.log(`[Scraper ONPE] Conectando a la ONPE desde NY...`);
+        console.log(`[Scraper ONPE] Conectando a la ONPE...`);
         await page.goto('https://consultaelectoral.onpe.gob.pe/inicio', {
             waitUntil: 'networkidle', // Espera a que carguen los scripts de Angular
             timeout: 60000
@@ -43,13 +46,13 @@ async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
         } catch (e) {
             console.log("[Scraper ONPE] El formulario no aparece. Tomando screenshot...");
             await page.screenshot({ path: 'onpe_error_stealth.png' });
-            // Si esto falla, CloudFront nos está filtrando por IP
-            throw new Error("Detección de bot persistente.");
+            throw new Error("Detección de bot persistente o la página tardó demasiado en cargar.");
         }
 
         // --- FASE 1: LLENADO ---
         await page.fill(inputDniSelector, dni);
         await page.click('button[name="favorito"]');
+
         // --- FASE 2: ¿ES MIEMBRO DE MESA? ---
         console.log(`[Scraper ONPE] Esperando respuesta de la ONPE...`);
 
@@ -68,7 +71,7 @@ async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
         console.log(`[Scraper ONPE] ¡ES MIEMBRO DE MESA! Procediendo a descargar...`);
 
         // --- FASE 3: LLENAR DATOS Y DESCARGAR ---
-       await page.click('.bloquecredenciales');
+        await page.click('.bloquecredenciales');
 
         await page.waitForSelector('input[placeholder="#"]');
         console.log(`[Scraper ONPE] Tecleando Código de Verificación y Fecha...`);
@@ -87,24 +90,29 @@ async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
         const btnDescargar = page.locator('button.button_estilo1', { hasText: 'Descargar' }).first();
         await btnDescargar.waitFor({ state: 'visible', timeout: 15000 });
 
-        console.log(`[Scraper ONPE] ¡Botón activado! Preparando trampa para la nueva pestaña...`);
+        console.log(`[Scraper ONPE] ¡Botón activado! Preparando intercepción de red...`);
 
-        // 1. Preparamos la promesa para capturar la nueva página
-        const nuevaPestanaPromise = context.waitForEvent('page');
+        // EL TRUCO DEFINITIVO: Interceptamos la petición HTTP en toda la ventana (context)
+        const peticionS3Promise = context.waitForEvent('request', request =>
+            request.url().includes('amazonaws.com')
+        );
 
-        // 2. Hacemos clic en el botón de descargar
+        // Hacemos clic en "Descargar"
         await btnDescargar.click();
 
-        // 3. CAPTURA INMEDIATA: Esperamos a que la pestaña exista, pero NO a que cargue
-        const nuevaPestana = await nuevaPestanaPromise;
+        // Atrapamos la URL en el aire en cuanto sale del navegador
+        const peticionS3 = await peticionS3Promise;
+        const urlPdfFinal = peticionS3.url();
 
-        // Le damos un respiro de medio segundo solo para que la URL se actualice de 'about:blank' a la de AWS
-        await page.waitForTimeout(500);
-
-        const urlPdfFinal = nuevaPestana.url();
+        if (!urlPdfFinal) {
+            throw new Error("Se interceptó la red pero la URL vino vacía");
+        }
 
         console.log(`[Scraper ONPE] ¡URL ATRAPADA CON ÉXITO!`);
         console.log(`[URL]: ${urlPdfFinal}`);
+
+        // Pequeña pausa para que el plugin stealth y las promesas pendientes se resuelvan antes de matar el navegador
+        await page.waitForTimeout(1000);
 
         return {
             esMiembro: true,
