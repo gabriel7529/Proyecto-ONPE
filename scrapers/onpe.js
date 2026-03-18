@@ -2,6 +2,7 @@ const { firefox } = require('playwright-extra');
 const stealth = require('puppeteer-extra-plugin-stealth')();
 
 // Le decimos a Playwright que use el plugin de sigilo globalmente
+stealth.enabledEvasions.delete('user-agent-override');
 firefox.use(stealth);
 
 async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
@@ -14,7 +15,7 @@ async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
-                
+
             ]
         });
 
