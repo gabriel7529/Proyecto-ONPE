@@ -1,17 +1,17 @@
-// IMPORTANTE: Ahora importamos desde 'playwright-extra'
+// IMPORTANTE: Cambiamos la forma de importar
 const { chromium } = require('playwright-extra');
 const stealth = require('puppeteer-extra-plugin-stealth')();
 
-// Decimos a Playwright que use el plugin de sigilo
+// Le decimos a Playwright que use el plugin de sigilo
 chromium.use(stealth);
 
 async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
     let browser;
     try {
-        console.log(`[Scraper ONPE] Iniciando misión con Sigilo Avanzado...`);
+        console.log(`[Scraper ONPE] Iniciando navegación sigilosa...`);
 
         browser = await chromium.launch({
-            headless: true, // Modo invisible para el VPS
+            headless: true, // Siempre true en el VPS
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -20,7 +20,7 @@ async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
         });
 
         const context = await browser.newContext({
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
             viewport: { width: 1280, height: 720 },
             locale: 'es-PE',
             timezoneId: 'America/Lima'
@@ -28,28 +28,27 @@ async function descargarONPE(dni, digitoVerificador, fechaNacimiento) {
 
         const page = await context.newPage();
 
-        // Vamos a la página con una espera más paciente
-        console.log(`[Scraper ONPE] Navegando a la ONPE...`);
+        // 1. Navegamos a la ONPE
+        console.log(`[Scraper ONPE] Conectando a la ONPE desde NY...`);
         await page.goto('https://consultaelectoral.onpe.gob.pe/inicio', {
-            waitUntil: 'networkidle',
+            waitUntil: 'networkidle', // Espera a que carguen los scripts de Angular
             timeout: 60000
         });
 
-        // Verificamos si ya no sale blanco
-        await page.waitForTimeout(2000); // Un respiro para que Angular despierte
-        const inputDni = page.locator('input[placeholder="Número de DNI"]');
-
+        // 2. Verificación de seguridad: ¿Apareció el input?
+        const inputDniSelector = 'input[placeholder="Número de DNI"]';
         try {
-            await inputDni.waitFor({ state: 'visible', timeout: 10000 });
-            console.log("[Scraper ONPE] ¡Formulario detectado! El sigilo funcionó.");
+            await page.waitForSelector(inputDniSelector, { state: 'visible', timeout: 15000 });
+            console.log("[Scraper ONPE] ¡Formulario cargado exitosamente!");
         } catch (e) {
-            console.log("[Scraper ONPE] Sigue sin aparecer el input. Tomando foto de diagnóstico...");
+            console.log("[Scraper ONPE] El formulario no aparece. Tomando screenshot...");
             await page.screenshot({ path: 'onpe_error_stealth.png' });
-            throw new Error("Detección de bot persistente o carga lenta.");
+            // Si esto falla, CloudFront nos está filtrando por IP
+            throw new Error("Detección de bot persistente.");
         }
 
         // --- FASE 1: LLENADO ---
-        await inputDni.fill(dni);
+        await page.fill(inputDniSelector, dni);
         await page.click('button[name="favorito"]');
         // --- FASE 2: ¿ES MIEMBRO DE MESA? ---
         console.log(`[Scraper ONPE] Esperando respuesta de la ONPE...`);
